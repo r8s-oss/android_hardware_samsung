@@ -41,6 +41,49 @@ namespace implementation {
 
 using RequestStatus = android::hardware::biometrics::fingerprint::V2_1::RequestStatus;
 
+/*
+ * Write value to path and close file.
+ */
+template <typename T>
+static void set(const std::string& path, const T& value) {
+    std::ofstream file(path);
+
+    if (!file) {
+        PLOG(ERROR) << "Failed to open: " << path;
+        return;
+    }
+
+    LOG(DEBUG) << "write: " << path << " value: " << value;
+
+    file << value << std::endl;
+
+    if (!file) {
+        PLOG(ERROR) << "Failed to write: " << path << " value: " << value;
+    }
+}
+
+template <typename T>
+static T get(const std::string& path, const T& def) {
+    std::ifstream file(path);
+
+    if (!file) {
+        PLOG(ERROR) << "Failed to open: " << path;
+        return def;
+    }
+
+    T result;
+
+    file >> result;
+
+    if (file.fail()) {
+        PLOG(ERROR) << "Failed to read: " << path;
+        return def;
+    } else {
+        LOG(DEBUG) << "read: " << path << " value: " << result;
+        return result;
+    }
+}
+
 BiometricsFingerprint* BiometricsFingerprint::sInstance = nullptr;
 
 BiometricsFingerprint::BiometricsFingerprint() : mClientCallback(nullptr) {
@@ -102,10 +145,20 @@ Return<bool> BiometricsFingerprint::isUdfps(uint32_t) {
 }
 
 Return<void> BiometricsFingerprint::onFingerDown(uint32_t, uint32_t, float, float) {
+#ifdef HAS_OPTICAL_UDFPS
+    request(SEM_REQUEST_TOUCH_EVENT, 2);
+    set("/sys/class/lcd/panel/fp_green_circle", 1);
+    set("/sys/class/lcd/panel/hbm_override", 1);
+#endif
     return Void();
 }
 
 Return<void> BiometricsFingerprint::onFingerUp() {
+#ifdef HAS_OPTICAL_UDFPS
+    set("/sys/class/lcd/panel/fp_green_circle", 0);
+    set("/sys/class/lcd/panel/hbm_override", 0);
+    request(SEM_REQUEST_TOUCH_EVENT, 1);
+#endif
     return Void();
 }
 
@@ -410,6 +463,7 @@ void BiometricsFingerprint::notify(const fingerprint_msg_t* msg) {
                          .isOk()) {
                     LOG(ERROR) << "failed to invoke fingerprint onAuthenticated callback";
                 }
+                getInstance()->onFingerUp();
             } else {
                 // Not a recognized fingerprint
                 if (!thisPtr->mClientCallback
