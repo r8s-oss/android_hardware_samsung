@@ -280,6 +280,10 @@ Return<RequestStatus> BiometricsFingerprint::enroll(const hidl_array<uint8_t, 69
 }
 
 Return<RequestStatus> BiometricsFingerprint::postEnroll() {
+#ifdef HAS_OPTICAL_UDFPS
+    set("/sys/class/lcd/panel/fp_green_circle", 0);
+    set("/sys/class/lcd/panel/hbm_override", 0);
+#endif
     return ErrorFilter(ss_fingerprint_post_enroll());
 }
 
@@ -297,6 +301,11 @@ Return<RequestStatus> BiometricsFingerprint::cancel() {
         msg.data.error = FINGERPRINT_ERROR_CANCELED;
         notify(&msg);
     }
+#endif
+
+#ifdef HAS_OPTICAL_UDFPS
+    set("/sys/class/lcd/panel/fp_green_circle", 0);
+    set("/sys/class/lcd/panel/hbm_override", 0);
 #endif
 
     return ErrorFilter(ret);
